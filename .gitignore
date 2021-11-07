@@ -72,3 +72,5 @@ target/
 # Gradle
 build/
 .gradle/
+RedReader.sublime-workspace
+RedReader.sublime-project

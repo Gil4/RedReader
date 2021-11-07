@@ -54,7 +54,7 @@ public abstract class FlingableItemView extends SwipableItemView {
 		super(context);
 
 		mOffsetBeginAllowed = General.dpToPixels(context, 50);
-		mOffsetActionPerformed = General.dpToPixels(context, 150);
+		mOffsetActionPerformed = General.dpToPixels(context, 50);
 
 		final int rrListBackgroundCol;
 
