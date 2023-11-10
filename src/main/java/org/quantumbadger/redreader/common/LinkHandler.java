@@ -17,7 +17,6 @@
 
 package org.quantumbadger.redreader.common;
 
-import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -34,7 +33,9 @@ import android.util.TypedValue;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import org.quantumbadger.redreader.R;
 import org.quantumbadger.redreader.activities.AlbumListingActivity;
 import org.quantumbadger.redreader.activities.BaseActivity;
@@ -46,7 +47,7 @@ import org.quantumbadger.redreader.activities.WebViewActivity;
 import org.quantumbadger.redreader.cache.CacheRequest;
 import org.quantumbadger.redreader.fragments.ShareOrderDialog;
 import org.quantumbadger.redreader.fragments.UserProfileDialog;
-import org.quantumbadger.redreader.http.FailedRequestBody;
+import org.quantumbadger.redreader.http.HTTPBackend;
 import org.quantumbadger.redreader.image.AlbumInfo;
 import org.quantumbadger.redreader.image.DeviantArtAPI;
 import org.quantumbadger.redreader.image.GetAlbumInfoListener;
@@ -58,9 +59,12 @@ import org.quantumbadger.redreader.image.ImgurAPIV3;
 import org.quantumbadger.redreader.image.RedditGalleryAPI;
 import org.quantumbadger.redreader.image.RedditVideosAPI;
 import org.quantumbadger.redreader.image.RedgifsAPI;
+import org.quantumbadger.redreader.image.RedgifsAPIV2;
 import org.quantumbadger.redreader.image.StreamableAPI;
-import org.quantumbadger.redreader.reddit.things.RedditPost;
+import org.quantumbadger.redreader.reddit.kthings.RedditPost;
 import org.quantumbadger.redreader.reddit.url.ComposeMessageURL;
+import org.quantumbadger.redreader.reddit.url.OpaqueSharedURL;
+import org.quantumbadger.redreader.reddit.url.PostCommentListingURL;
 import org.quantumbadger.redreader.reddit.url.RedditURLParser;
 
 import java.util.ArrayList;
@@ -137,7 +141,7 @@ public class LinkHandler {
 
 	public static void onLinkClicked(
 			final AppCompatActivity activity,
-			String url,
+			final String url,
 			final boolean forceNoImage,
 			final RedditPost post,
 			final AlbumInfo albumInfo,
@@ -155,7 +159,7 @@ public class LinkHandler {
 
 			if(rrUri.getAuthority().equals("msg")) {
 				new Handler().post(() -> {
-					final AlertDialog.Builder builder = new AlertDialog.Builder(
+					final MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(
 							activity);
 					builder.setTitle(rrUri.getQueryParameter("title"));
 					builder.setMessage(rrUri.getQueryParameter("message"));
@@ -167,22 +171,13 @@ public class LinkHandler {
 			}
 		}
 
-		if(url.startsWith("r/") || url.startsWith("u/")) {
-			url = "/" + url;
-		}
+		final Uri normalUrl = convertAndNormalizeUri(url);
+		final String normalUrlString = normalUrl.toString();
 
-		if(url.startsWith("/")) {
-			url = "https://reddit.com" + url;
-		}
-
-		if(!url.contains("://")) {
-			url = "http://" + url;
-		}
-
-		if(!forceNoImage && isProbablyAnImage(url)) {
+		if(!forceNoImage && isProbablyAnImage(normalUrlString)) {
 
 			final Intent intent = new Intent(activity, ImageViewActivity.class);
-			intent.setData(Uri.parse(url));
+			intent.setData(normalUrl);
 			intent.putExtra("post", post);
 
 			if(albumInfo != null) {
@@ -194,8 +189,8 @@ public class LinkHandler {
 			return;
 		}
 
-		if(!forceNoImage && (imgurAlbumPattern.matcher(url).matches()
-				|| redditGalleryPattern.matcher(url).matches())) {
+		if(!forceNoImage && (imgurAlbumPattern.matcher(normalUrlString).matches()
+				|| redditGalleryPattern.matcher(normalUrlString).matches())) {
 
 			final PrefsUtility.AlbumViewMode albumViewMode
 					= PrefsUtility.pref_behaviour_albumview_mode();
@@ -206,7 +201,7 @@ public class LinkHandler {
 					final Intent intent = new Intent(
 							activity,
 							AlbumListingActivity.class);
-					intent.setData(Uri.parse(url));
+					intent.setData(normalUrl);
 					intent.putExtra("post", post);
 					activity.startActivity(intent);
 					return;
@@ -215,26 +210,45 @@ public class LinkHandler {
 				case INTERNAL_BROWSER: {
 					if(PrefsUtility.pref_behaviour_usecustomtabs()
 							&& Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
-						openCustomTab(activity, Uri.parse(url), post);
+						openCustomTab(activity, normalUrl, post);
 
 					} else {
-						openInternalBrowser(activity, url, post);
+						openInternalBrowser(activity, normalUrlString, post);
 					}
 					return;
 				}
 
 				case EXTERNAL_BROWSER: {
-					openWebBrowser(activity, Uri.parse(url), fromExternalIntent);
+					openWebBrowser(activity, normalUrl, fromExternalIntent);
 					return;
 				}
 			}
 		}
 
-		final RedditURLParser.RedditURL redditURL = RedditURLParser.parse(Uri.parse(url));
+		final RedditURLParser.RedditURL redditURL = RedditURLParser.parse(normalUrl);
 		if(redditURL != null) {
 
 			switch(redditURL.pathType()) {
-
+				case RedditURLParser.OPAQUE_SHARED_URL:
+					// kick off a thread to get the real url
+					new Thread(() -> {
+						final String toFetchUrl = OpaqueSharedURL.getUrlToFetch(
+								(OpaqueSharedURL) redditURL
+						).toString();
+						final String realUrl = HTTPBackend.getBackend()
+								.resolveRedirectUri(toFetchUrl);
+						if(realUrl != null) {
+							activity.runOnUiThread(() -> onLinkClicked(
+									activity,
+									realUrl,
+									forceNoImage,
+									post,
+									albumInfo,
+									albumImageIndex,
+									fromExternalIntent));
+						}
+					}).start();
+					return;
 				case RedditURLParser.SUBREDDIT_POST_LISTING_URL:
 				case RedditURLParser.MULTIREDDIT_POST_LISTING_URL:
 				case RedditURLParser.USER_POST_LISTING_URL:
@@ -278,8 +292,7 @@ public class LinkHandler {
 				}
 
 				case RedditURLParser.USER_PROFILE_URL: {
-					UserProfileDialog.newInstance(redditURL.asUserProfileURL().username)
-							.show(activity.getSupportFragmentManager(), null);
+					UserProfileDialog.show(activity, redditURL.asUserProfileURL().username);
 					return;
 				}
 			}
@@ -288,20 +301,21 @@ public class LinkHandler {
 		// Use a browser
 
 		if(!PrefsUtility.pref_behaviour_useinternalbrowser()) {
-			if(openWebBrowser(activity, Uri.parse(url), fromExternalIntent)) {
+			if(openWebBrowser(activity, normalUrl, fromExternalIntent)) {
 				return;
 			}
 		}
 
-		if(youtubeDotComPattern.matcher(url).matches()
-				|| vimeoPattern.matcher(url).matches()
-				|| googlePlayPattern.matcher(url).matches()) {
-			if(openWebBrowser(activity, Uri.parse(url), fromExternalIntent)) {
+		if(youtubeDotComPattern.matcher(normalUrlString).matches()
+				|| vimeoPattern.matcher(normalUrlString).matches()
+				|| googlePlayPattern.matcher(normalUrlString).matches()
+				|| normalUrlString.startsWith("mailto:")) {
+			if(openWebBrowser(activity, normalUrl, fromExternalIntent)) {
 				return;
 			}
 		}
 
-		final Matcher youtuDotBeMatcher = youtuDotBePattern.matcher(url);
+		final Matcher youtuDotBeMatcher = youtuDotBePattern.matcher(normalUrlString);
 
 		if(youtuDotBeMatcher.find() && youtuDotBeMatcher.group(1) != null) {
 			final String youtuBeUrl = "http://youtube.com/watch?v="
@@ -316,10 +330,10 @@ public class LinkHandler {
 
 		if(PrefsUtility.pref_behaviour_usecustomtabs()
 				&& Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
-			openCustomTab(activity, Uri.parse(url), post);
+			openCustomTab(activity, normalUrl, post);
 
 		} else {
-			openInternalBrowser(activity, url, post);
+			openInternalBrowser(activity, normalUrlString, post);
 		}
 
 	}
@@ -335,6 +349,8 @@ public class LinkHandler {
 		if(uri == null) {
 			return;
 		}
+
+		final String normalUriString = convertAndNormalizeUri(uri).toString();
 
 		final EnumSet<LinkHandler.LinkAction> itemPref
 				= PrefsUtility.pref_menus_link_context_items();
@@ -358,7 +374,7 @@ public class LinkHandler {
 					LinkAction.EXTERNAL));
 		}
 		if(itemPref.contains(LinkAction.SAVE_IMAGE)
-				&& isProbablyAnImage(uri)
+				&& isProbablyAnImage(normalUriString)
 				&& !forceNoImage) {
 			menu.add(new LinkMenuItem(
 					activity,
@@ -369,7 +385,7 @@ public class LinkHandler {
 			menu.add(new LinkMenuItem(activity, R.string.action_share, LinkAction.SHARE));
 		}
 		if(itemPref.contains(LinkAction.SHARE_IMAGE)
-				&& isProbablyAnImage(uri)
+				&& isProbablyAnImage(normalUriString)
 				&& !forceNoImage) {
 			menu.add(new LinkMenuItem(
 					activity,
@@ -382,10 +398,13 @@ public class LinkHandler {
 			menuText[i] = menu.get(i).title;
 		}
 
-		final AlertDialog.Builder builder = new AlertDialog.Builder(activity);
+		final MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(activity);
 
 		builder.setItems(menuText,
-				(dialog, which) -> onActionMenuItemSelected(uri, activity, menu.get(which).action));
+				(dialog, which) -> onActionMenuItemSelected(
+						normalUriString,
+						activity,
+						menu.get(which).action));
 
 		//builder.setNeutralButton(R.string.dialog_cancel, null);
 
@@ -400,7 +419,7 @@ public class LinkHandler {
 			final LinkAction action) {
 		switch(action) {
 			case SHARE:
-				shareText(activity, null, uri);
+				shareText(activity, null, getPreferredRedditUriString(uri));
 				break;
 			case COPY_URL:
 				final ClipboardManager clipboardManager
@@ -549,7 +568,7 @@ public class LinkHandler {
 	}
 
 	public static final Pattern imgurPattern
-			= Pattern.compile(".*[^A-Za-z]imgur\\.com/(\\w+).*");
+			= Pattern.compile("https?://?(i\\.)?imgur\\.com/(\\w+).*");
 	public static final Pattern imgurAlbumPattern
 			= Pattern.compile(".*[^A-Za-z]imgur\\.com/(a|gallery)/(\\w+).*");
 	public static final Pattern redditGalleryPattern
@@ -579,13 +598,17 @@ public class LinkHandler {
 	public static final Pattern giphyPattern
 			= Pattern.compile(".*[^A-Za-z]giphy\\.com/gifs/(\\w+).*");
 
-	public static boolean isProbablyAnImage(final String url) {
+	public static boolean isProbablyAnImage(@Nullable final String url) {
+
+		if(url == null) {
+			return false;
+		}
 
 		{
 			final Matcher matchImgur = imgurPattern.matcher(url);
 
 			if(matchImgur.find()) {
-				final String imgId = matchImgur.group(1);
+				final String imgId = matchImgur.group(2);
 				if(imgId.length() > 2 && !imgId.startsWith("gallery")) {
 					return true;
 				}
@@ -719,12 +742,7 @@ public class LinkHandler {
 				true,
 				new ImageInfoRetryListener(listener) {
 					@Override
-					public void onFailure(
-							final @CacheRequest.RequestFailureType int type,
-							final Throwable t,
-							final Integer status,
-							final String readableMessage,
-							@NonNull final Optional<FailedRequestBody> firstBody) {
+					public void onFailure(@NonNull final RRError firstError) {
 
 						if(General.isSensitiveDebugLoggingEnabled()) {
 							Log.i(
@@ -739,12 +757,7 @@ public class LinkHandler {
 								false,
 								new ImageInfoRetryListener(listener) {
 									@Override
-									public void onFailure(
-											final @CacheRequest.RequestFailureType int type,
-											final Throwable t,
-											final Integer status,
-											final String readableMessage,
-											@NonNull final Optional<FailedRequestBody> body) {
+									public void onFailure(@NonNull final RRError error) {
 
 										if(General.isSensitiveDebugLoggingEnabled()) {
 											Log.i(
@@ -759,13 +772,7 @@ public class LinkHandler {
 												new ImageInfoRetryListener(listener) {
 													@Override
 													public void onFailure(
-															final @CacheRequest.RequestFailureType
-																	int type,
-															final Throwable t,
-															final Integer status,
-															final String readableMessage,
-															@NonNull final
-																Optional<FailedRequestBody> body) {
+															@NonNull final RRError error) {
 
 														Log.i(
 																"getImgurImageInfo",
@@ -781,12 +788,7 @@ public class LinkHandler {
 															));
 
 														} else {
-															listener.onFailure(
-																	type,
-																	t,
-																	status,
-																	readableMessage,
-																	firstBody);
+															listener.onFailure(firstError);
 														}
 													}
 												});
@@ -839,12 +841,7 @@ public class LinkHandler {
 				true,
 				new AlbumInfoRetryListener(listener) {
 					@Override
-					public void onFailure(
-							final @CacheRequest.RequestFailureType int type,
-							final Throwable t,
-							final Integer status,
-							final String readableMessage,
-							@NonNull final Optional<FailedRequestBody> firstBody) {
+					public void onFailure(@NonNull final RRError firstError) {
 
 						if(General.isSensitiveDebugLoggingEnabled()) {
 							Log.i(
@@ -860,12 +857,7 @@ public class LinkHandler {
 								false,
 								new AlbumInfoRetryListener(listener) {
 									@Override
-									public void onFailure(
-											final @CacheRequest.RequestFailureType int type,
-											final Throwable t,
-											final Integer status,
-											final String readableMessage,
-											@NonNull final Optional<FailedRequestBody> body) {
+									public void onFailure(@NonNull final RRError error) {
 
 										if(General.isSensitiveDebugLoggingEnabled()) {
 											Log.i(
@@ -881,23 +873,12 @@ public class LinkHandler {
 												new AlbumInfoRetryListener(listener) {
 													@Override
 													public void onFailure(
-															final @CacheRequest.RequestFailureType
-																	int type,
-															final Throwable t,
-															final Integer status,
-															final String readableMessage,
-															@NonNull final
-																Optional<FailedRequestBody> body) {
+															@NonNull final RRError error) {
 
 														Log.i(
 																"getImgurImageInfo",
 																"All API requests failed!");
-														listener.onFailure(
-																type,
-																t,
-																status,
-																readableMessage,
-																firstBody);
+														listener.onFailure(firstError);
 													}
 												});
 
@@ -942,25 +923,31 @@ public class LinkHandler {
 			}
 		}
 
-		listener.onFailure(
+		listener.onFailure(General.getGeneralErrorForFailure(
+				context,
 				CacheRequest.REQUEST_FAILURE_MALFORMED_URL,
 				null,
 				null,
-				"Cannot parse '" + url + "' as an album URL",
-				Optional.empty());
+				url,
+				Optional.empty()));
 	}
 
 	public static void getImageInfo(
 			final Context context,
-			final String url,
+			@Nullable final String url,
 			@NonNull final Priority priority,
 			final GetImageInfoListener listener) {
+
+		if(url == null) {
+			listener.onNotAnImage();
+			return;
+		}
 
 		{
 			final Matcher matchImgur = imgurPattern.matcher(url);
 
 			if(matchImgur.find()) {
-				final String imgId = matchImgur.group(1);
+				final String imgId = matchImgur.group(2);
 				if(imgId.length() > 2 && !imgId.startsWith("gallery")) {
 					getImgurImageInfo(context, imgId, priority, true, listener);
 					return;
@@ -986,7 +973,40 @@ public class LinkHandler {
 			if(matchRedgifs.find()) {
 				final String imgId = matchRedgifs.group(1);
 				if(imgId.length() > 5) {
-					RedgifsAPI.getImageInfo(context, imgId, priority, listener);
+					RedgifsAPIV2.getImageInfo(
+							context,
+							imgId,
+							priority,
+							new ImageInfoRetryListener(listener) {
+
+						@Override
+						public void onFailure(@NonNull final RRError error) {
+
+							Log.e(
+									"getImageInfo",
+									"RedGifs V2 failed, trying V1 (" + error + ")",
+									error.t);
+
+							RedgifsAPI.getImageInfo(
+									context,
+									imgId,
+									priority,
+									new ImageInfoRetryListener(listener) {
+								@Override
+								public void onFailure(@NonNull final RRError error) {
+
+									// Retry V2 so that the final error which is logged
+									// relates to the V2 API
+									Log.e(
+											"getImageInfo",
+											"RedGifs V1 also failed, retrying V2: " + error,
+											error.t);
+
+									RedgifsAPIV2.getImageInfo(context, imgId, priority, listener);
+								}
+							});
+						}
+					});
 					return;
 				}
 			}
@@ -1229,7 +1249,7 @@ public class LinkHandler {
 
 	}
 
-	public static LinkedHashSet<String> computeAllLinks(final String text) {
+	public static LinkedHashSet<String> computeAllLinks(@NonNull final String text) {
 
 		final LinkedHashSet<String> result = new LinkedHashSet<>();
 
@@ -1276,7 +1296,11 @@ public class LinkHandler {
 	public static void shareText(
 			@NonNull final AppCompatActivity activity,
 			@Nullable final String subject,
-			@NonNull final String text) {
+			@Nullable String text) {
+
+		if(text == null) {
+			text = "<null>";
+		}
 
 		final Intent mailer = new Intent(Intent.ACTION_SEND);
 		mailer.setType("text/plain");
@@ -1296,5 +1320,80 @@ public class LinkHandler {
 					mailer,
 					activity.getString(R.string.action_share)));
 		}
+	}
+
+	public static Uri convertAndNormalizeUri(@NonNull String uri) {
+		if(uri.startsWith("r/") || uri.startsWith("u/")) {
+			uri = "/" + uri;
+		}
+
+		if(uri.startsWith("/")) {
+			uri = "https://reddit.com" + uri;
+		}
+
+		if(!uri.contains("://") && !uri.startsWith("mailto:")) {
+			uri = "http://" + uri;
+		}
+
+		final Uri parsedUri = Uri.parse(uri).normalizeScheme();
+		final Uri.Builder uriBuilder = parsedUri.buildUpon();
+
+		final String authority = parsedUri.getEncodedAuthority();
+		if(authority != null) {
+			final String normalAuthority;
+
+			//Don't lowercase the rare userinfo component if present.
+			if(authority.contains("@")) {
+				final String[] authorityParts = authority.split("@", 2);
+				normalAuthority =
+						authorityParts[0] + "@" + StringUtils.asciiLowercase(authorityParts[1]);
+			} else {
+				normalAuthority = StringUtils.asciiLowercase(authority);
+			}
+
+			uriBuilder.encodedAuthority(normalAuthority);
+		}
+
+		return uriBuilder.build();
+	}
+
+	public static String getPreferredRedditUriString(final String uri) {
+		final Uri parsedUri = convertAndNormalizeUri(uri);
+
+		//Return non-Reddit links normalized but otherwise unaltered
+		if (RedditURLParser.parse(parsedUri) == null) {
+			return parsedUri.toString();
+		}
+
+		//Respect non-participation links
+		if(parsedUri.getHost().equals("np.reddit.com")) {
+			return parsedUri.toString();
+		}
+
+		final PostCommentListingURL potentialPostLink = PostCommentListingURL.parse(parsedUri);
+		final String postId;
+		if(potentialPostLink != null && potentialPostLink.commentId == null) {
+			//Direct link to a post, not to a comment or anything else
+			postId = potentialPostLink.postId;
+		} else {
+			postId = null;
+		}
+
+		final PrefsUtility.SharingDomain preferredDomain
+				= PrefsUtility.pref_behaviour_sharing_domain();
+
+		//Only direct links to posts will be converted to redd.it links
+		if(preferredDomain == PrefsUtility.SharingDomain.SHORT_REDDIT && postId == null) {
+			return parsedUri.toString();
+		}
+
+		final Uri.Builder uriBuilder = parsedUri.buildUpon();
+
+		uriBuilder.encodedAuthority(preferredDomain.domain);
+		if(preferredDomain == PrefsUtility.SharingDomain.SHORT_REDDIT) {
+			uriBuilder.encodedPath("/" + postId);
+		}
+
+		return uriBuilder.build().toString();
 	}
 }

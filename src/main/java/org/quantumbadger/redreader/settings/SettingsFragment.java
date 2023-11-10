@@ -17,19 +17,17 @@
 
 package org.quantumbadger.redreader.settings;
 
-import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Html;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import androidx.annotation.StringRes;
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.FragmentActivity;
 import androidx.preference.CheckBoxPreference;
 import androidx.preference.EditTextPreference;
@@ -38,8 +36,10 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceGroup;
 import androidx.preference.PreferenceScreen;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import org.quantumbadger.redreader.BuildConfig;
 import org.quantumbadger.redreader.R;
+import org.quantumbadger.redreader.RedReader;
 import org.quantumbadger.redreader.activities.BaseActivity;
 import org.quantumbadger.redreader.activities.BugReportActivity;
 import org.quantumbadger.redreader.activities.ChangelogActivity;
@@ -52,8 +52,9 @@ import org.quantumbadger.redreader.common.FileUtils;
 import org.quantumbadger.redreader.common.General;
 import org.quantumbadger.redreader.common.PrefsBackup;
 import org.quantumbadger.redreader.common.PrefsUtility;
-import org.quantumbadger.redreader.common.RRTime;
 import org.quantumbadger.redreader.common.TorCommon;
+import org.quantumbadger.redreader.common.time.TimeDuration;
+import org.quantumbadger.redreader.common.time.TimestampUTC;
 import org.quantumbadger.redreader.reddit.prepared.RedditChangeDataManager;
 
 import java.io.File;
@@ -172,11 +173,14 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 				R.string.pref_images_inline_image_previews_key,
 				R.string.pref_images_high_res_thumbnails_key,
 				R.string.pref_accessibility_min_comment_height_key,
-				R.string.pref_appearance_android_status_key
+				R.string.pref_appearance_android_status_key,
+				R.string.pref_behaviour_collapse_sticky_comments_key,
+				R.string.pref_behaviour_sharing_domain_key
 		};
 
 		final int[] editTextPrefsToUpdate = {
-				R.string.pref_behaviour_comment_min_key
+				R.string.pref_behaviour_comment_min_key,
+				R.string.pref_reddit_client_id_override_key
 		};
 
 		for(final int pref : listPrefsToUpdate) {
@@ -239,18 +243,9 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 		final Preference restorePreferencesPref =
 				findPreference(getString(R.string.pref_item_restore_preferences_key));
 
-
-		final PackageInfo pInfo;
-
-		try {
-			pInfo = context.getPackageManager()
-					.getPackageInfo(context.getPackageName(), 0);
-		} catch(final PackageManager.NameNotFoundException e) {
-			throw new RuntimeException(e);
-		}
-
 		if(versionPref != null) {
-			versionPref.setSummary(pInfo.versionName);
+			versionPref.setSummary(
+					RedReader.getInstance(context).getPackageInfo().getVersionName());
 		}
 
 		if(changelogPref != null) {
@@ -273,7 +268,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 
 				// Run this after the preference has actually changed
 				AndroidCommon.UI_THREAD_HANDLER.post(() -> {
-					TorCommon.updateTorStatus(context);
+					TorCommon.updateTorStatus();
 					if(TorCommon.isTorEnabled()
 							!= Boolean.TRUE.equals(newValue)) {
 						throw new RuntimeException(
@@ -304,8 +299,9 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 					return true;
 				}
 
+				final TimestampUTC utc = TimestampUTC.now();
 				final String filename
-						= RRTime.formatDateTimeFilenameSafe(RRTime.utcCurrentTimeMillis())
+						= utc.formatFilenameSafe()
 								+ ".rr_prefs_backup";
 
 				//noinspection SpellCheckingInspection
@@ -468,6 +464,22 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 		}
 
 		{
+			final ListPreference sharingDomainPref = findPreference(
+					getString(R.string.pref_behaviour_sharing_domain_key));
+			final Preference shareAsPermalinkPref = findPreference(
+					getString(R.string.pref_behaviour_share_permalink_key));
+
+			if(sharingDomainPref != null) {
+				sharingDomainPref.setOnPreferenceChangeListener((preference, newValue) -> {
+					final int index = sharingDomainPref.findIndexOfValue((String)newValue);
+					sharingDomainPref.setSummary(sharingDomainPref.getEntries()[index]);
+					shareAsPermalinkPref.setEnabled(!newValue.equals("short_reddit"));
+					return true;
+				});
+			}
+		}
+
+		{
 			final CheckBoxPreference hideOnScrollPref
 					= findPreference(getString(
 							R.string.pref_appearance_hide_toolbar_on_scroll_key));
@@ -619,7 +631,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 			choices.add(Html.fromHtml("<small>" + path +
 					" [" + freeSpace + "]</small>"));
 		}
-		new AlertDialog.Builder(context)
+		new MaterialAlertDialogBuilder(context)
 				.setTitle(R.string.pref_cache_location_title)
 				.setSingleChoiceItems(
 						choices.toArray(new CharSequence[0]),
@@ -692,7 +704,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 			cacheItemStrings[cacheType.ordinal()] = getString(cacheType.plainStringRes);
 		}
 
-		final AlertDialog cacheDialog = new AlertDialog.Builder(context)
+		final AlertDialog cacheDialog = new MaterialAlertDialogBuilder(context)
 				.setTitle(R.string.pref_cache_clear_title)
 				.setMultiChoiceItems(cacheItemStrings, null,
 						(dialog, which, isChecked) ->
@@ -707,7 +719,7 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 								cachesToClear.get(CacheType.IMAGES));
 
 						if(Objects.requireNonNull(cachesToClear.get(CacheType.FLAGS))) {
-							RedditChangeDataManager.pruneAllUsersWhereOlderThan(0);
+							RedditChangeDataManager.pruneAllUsersWhereOlderThan(TimeDuration.ms(0));
 						}
 					}
 				}.start())

@@ -17,7 +17,7 @@
 
 package org.quantumbadger.redreader.fragments;
 
-import android.app.AlertDialog;
+import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.content.Context;
 import android.net.Uri;
@@ -26,6 +26,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatDialogFragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import org.quantumbadger.redreader.R;
 import org.quantumbadger.redreader.account.RedditAccountChangeListener;
 import org.quantumbadger.redreader.account.RedditAccountManager;
@@ -96,7 +97,7 @@ public class SessionListDialog extends AppCompatDialogFragment
 
 		final Context context = getContext();
 
-		final AlertDialog.Builder builder = new AlertDialog.Builder(context);
+		final MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(context);
 		builder.setTitle(context.getString(R.string.options_past));
 
 		rv = new RecyclerView(context);
@@ -113,6 +114,7 @@ public class SessionListDialog extends AppCompatDialogFragment
 		return builder.create();
 	}
 
+	@SuppressLint("NotifyDataSetChanged")
 	@Override
 	public void onRedditAccountChanged() {
 		AndroidCommon.UI_THREAD_HANDLER.post(() -> rv.getAdapter().notifyDataSetChanged());

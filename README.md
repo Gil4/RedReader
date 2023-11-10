@@ -9,11 +9,14 @@ An unofficial, open source Android client for Reddit.
 [<img src="https://play.google.com/intl/en_us/badges/images/generic/en_badge_web_generic.png"
       alt="Get it on Google Play"
       height="80">](https://play.google.com/store/apps/details?id=org.quantumbadger.redreader)
+[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
+     alt="Get it on F-Droid"
+     height="80">](https://f-droid.org/packages/org.quantumbadger.redreader/)
 
 Features
 --------
 
-* Free and open-source Software - no ads/tracking
+* Free and open source, with no ads or tracking
 * Lightweight and fast
 * Swipe posts left and right to perform customizable actions, such as
     upvote/downvote, or save/hide
@@ -25,6 +28,8 @@ Features
 * Built-in image viewer, and GIF/video player
 * Multiple themes, including night mode, and ultra black for AMOLED displays
 * Support for Android 4.0+
+* Translations for multiple languages
+* Accessibility features and optimization for screen reader use
 
 
 Downloading
@@ -79,4 +84,4 @@ included in [LICENSE.txt](LICENSE.txt).
 Thanks
 ------
 
-A full list of contributors is included in the [changelog](assets/changelog.txt).
+A full list of contributors is included in the [changelog](src/main/assets/changelog.txt).

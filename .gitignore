@@ -72,5 +72,7 @@ target/
 # Gradle
 build/
 .gradle/
-RedReader.sublime-workspace
-RedReader.sublime-project
+
+reddit_auth.txt
+/release/**
+/releases/**/**

@@ -45,9 +45,10 @@ import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.annotation.UiThread;
 import com.github.lzyzsd.circleprogress.DonutProgress;
-import com.google.android.exoplayer2.source.ExtractorMediaSource;
+import com.google.android.exoplayer2.MediaItem;
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.MergingMediaSource;
+import com.google.android.exoplayer2.source.ProgressiveMediaSource;
 import org.quantumbadger.redreader.R;
 import org.quantumbadger.redreader.account.RedditAccountManager;
 import org.quantumbadger.redreader.cache.CacheManager;
@@ -59,21 +60,21 @@ import org.quantumbadger.redreader.common.Constants;
 import org.quantumbadger.redreader.common.General;
 import org.quantumbadger.redreader.common.GenericFactory;
 import org.quantumbadger.redreader.common.LinkHandler;
-import org.quantumbadger.redreader.common.Optional;
 import org.quantumbadger.redreader.common.PrefsUtility;
 import org.quantumbadger.redreader.common.Priority;
 import org.quantumbadger.redreader.common.RRError;
 import org.quantumbadger.redreader.common.datastream.SeekableInputStream;
+import org.quantumbadger.redreader.common.time.TimestampUTC;
 import org.quantumbadger.redreader.fragments.ImageInfoDialog;
-import org.quantumbadger.redreader.http.FailedRequestBody;
 import org.quantumbadger.redreader.image.AlbumInfo;
 import org.quantumbadger.redreader.image.GetAlbumInfoListener;
 import org.quantumbadger.redreader.image.GetImageInfoListener;
 import org.quantumbadger.redreader.image.GifDecoderThread;
 import org.quantumbadger.redreader.image.ImageInfo;
+import org.quantumbadger.redreader.reddit.api.RedditPostActions;
+import org.quantumbadger.redreader.reddit.kthings.RedditPost;
 import org.quantumbadger.redreader.reddit.prepared.RedditParsedPost;
 import org.quantumbadger.redreader.reddit.prepared.RedditPreparedPost;
-import org.quantumbadger.redreader.reddit.things.RedditPost;
 import org.quantumbadger.redreader.reddit.url.PostCommentListingURL;
 import org.quantumbadger.redreader.views.GIFView;
 import org.quantumbadger.redreader.views.HorizontalSwipeProgressOverlay;
@@ -187,13 +188,7 @@ public class ImageViewActivity extends BaseActivity
 					new GetAlbumInfoListener() {
 
 						@Override
-						public void onFailure(
-								final @CacheRequest.RequestFailureType int type,
-								final Throwable t,
-								final Integer status,
-								final String readableMessage,
-								@NonNull final Optional<FailedRequestBody> body) {
-
+						public void onFailure(@NonNull final RRError error) {
 							// Do nothing
 						}
 
@@ -268,12 +263,7 @@ public class ImageViewActivity extends BaseActivity
 				new GetImageInfoListener() {
 
 					@Override
-					public void onFailure(
-							final @CacheRequest.RequestFailureType int type,
-							final Throwable t,
-							final Integer status,
-							final String readableMessage,
-							@NonNull final Optional<FailedRequestBody> body) {
+					public void onFailure(@NonNull final RRError error) {
 
 						General.quickToast(
 								ImageViewActivity.this,
@@ -327,7 +317,7 @@ public class ImageViewActivity extends BaseActivity
 					CacheManager.getInstance(this),
 					0,
 					parsedPost,
-					-1,
+					TimestampUTC.ZERO,
 					false,
 					false,
 					false,
@@ -347,10 +337,11 @@ public class ImageViewActivity extends BaseActivity
 					R.id.image_view_hidden_accessibility_go_back);
 
 			if(post != null) {
-				commentsButton.setOnClickListener(v -> RedditPreparedPost.onActionMenuItemSelected(
-						post,
-						this,
-						RedditPreparedPost.Action.COMMENTS_SWITCH));
+				commentsButton.setOnClickListener(
+						v -> RedditPostActions.INSTANCE.onActionMenuItemSelected(
+								post,
+								this,
+								RedditPostActions.Action.COMMENTS_SWITCH));
 			} else {
 				commentsButton.setContentDescription(null);
 				commentsButton.setClickable(false);
@@ -393,7 +384,8 @@ public class ImageViewActivity extends BaseActivity
 						@Override
 						public boolean onSwipe(@BezelSwipeOverlay.SwipeEdge final int edge) {
 
-							toolbarOverlay.setContents(post.generateToolbar(
+							toolbarOverlay.setContents(RedditPostActions.INSTANCE.generateToolbar(
+									post,
 									ImageViewActivity.this,
 									false,
 									toolbarOverlay));
@@ -924,33 +916,11 @@ public class ImageViewActivity extends BaseActivity
 					private boolean mProgressTextSet = false;
 
 					@Override
-					public void onFailure(
-							final int type,
-							@Nullable final Throwable t,
-							@Nullable final Integer httpStatus,
-							@Nullable final String readableMessage,
-							@NonNull final Optional<FailedRequestBody> body) {
+					public void onFailure(@NonNull final RRError error) {
 
 						synchronized(resultLock) {
 
 							if(!failed.getAndSet(true)) {
-
-								if(type == CacheRequest.REQUEST_FAILURE_CONNECTION
-										&& uri.getHost().contains("redgifs")) {
-
-									// Redgifs have lots of server issues
-									revertToWeb();
-									return;
-								}
-
-								final RRError error = General.getGeneralErrorForFailure(
-										ImageViewActivity.this,
-										type,
-										t,
-										httpStatus,
-										uri.toString(),
-										body);
-
 								AndroidCommon.UI_THREAD_HANDLER.post(() -> {
 									final LinearLayout layout
 											= new LinearLayout(ImageViewActivity.this);
@@ -998,7 +968,7 @@ public class ImageViewActivity extends BaseActivity
 					public void onDataStreamAvailable(
 							@NonNull final GenericFactory<SeekableInputStream, IOException>
 									streamFactory,
-							final long timestamp,
+							final TimestampUTC timestamp,
 							@NonNull final UUID session,
 							final boolean fromCache,
 							@Nullable final String mimetype) {
@@ -1033,24 +1003,11 @@ public class ImageViewActivity extends BaseActivity
 					this,
 					new CacheRequestCallbacks() {
 						@Override
-						public void onFailure(
-								final int type,
-								@Nullable final Throwable t,
-								@Nullable final Integer httpStatus,
-								@Nullable final String readableMessage,
-								@NonNull final Optional<FailedRequestBody> body) {
+						public void onFailure(@NonNull final RRError error) {
 
 							synchronized(resultLock) {
 
 								if(!failed.getAndSet(true)) {
-
-									final RRError error = General.getGeneralErrorForFailure(
-											ImageViewActivity.this,
-											type,
-											t,
-											httpStatus,
-											audioUri.toString(),
-											body);
 
 									AndroidCommon.runOnUiThread(() -> {
 										final LinearLayout layout
@@ -1070,7 +1027,7 @@ public class ImageViewActivity extends BaseActivity
 						public void onDataStreamAvailable(
 								@NonNull final GenericFactory<
 										SeekableInputStream, IOException> streamFactory,
-								final long timestamp,
+								final TimestampUTC timestamp,
 								@NonNull final UUID session,
 								final boolean fromCache,
 								@Nullable final String mimetype) {
@@ -1164,8 +1121,9 @@ public class ImageViewActivity extends BaseActivity
 			final MediaSource mediaSource;
 
 			final MediaSource videoMediaSource
-					= new ExtractorMediaSource.Factory(videoDataSourceFactory)
-							.createMediaSource(ExoPlayerSeekableInputStreamDataSource.URI);
+					= new ProgressiveMediaSource.Factory(videoDataSourceFactory)
+							.createMediaSource(MediaItem.fromUri(
+									ExoPlayerSeekableInputStreamDataSource.URI));
 
 			if(audioStream == null) {
 				mediaSource = videoMediaSource;
@@ -1177,8 +1135,9 @@ public class ImageViewActivity extends BaseActivity
 
 				mediaSource = new MergingMediaSource(
 						videoMediaSource,
-						new ExtractorMediaSource.Factory(audioDataSourceFactory)
-								.createMediaSource(ExoPlayerSeekableInputStreamDataSource.URI));
+						new ProgressiveMediaSource.Factory(audioDataSourceFactory)
+								.createMediaSource(MediaItem.fromUri(
+										ExoPlayerSeekableInputStreamDataSource.URI)));
 			}
 
 			mVideoPlayerWrapper = new ExoPlayerWrapperView(

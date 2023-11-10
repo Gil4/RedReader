@@ -32,11 +32,9 @@ import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
-
-import com.google.android.exoplayer2.ExoPlaybackException;
-import com.google.android.exoplayer2.ExoPlayerFactory;
+import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.PlaybackException;
 import com.google.android.exoplayer2.Player;
-import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.ui.AspectRatioFrameLayout;
@@ -47,8 +45,8 @@ import org.quantumbadger.redreader.R;
 import org.quantumbadger.redreader.common.AndroidCommon;
 import org.quantumbadger.redreader.common.General;
 import org.quantumbadger.redreader.common.PrefsUtility;
-import org.quantumbadger.redreader.common.RRTime;
 
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class ExoPlayerWrapperView extends FrameLayout {
@@ -61,7 +59,7 @@ public class ExoPlayerWrapperView extends FrameLayout {
 
 	@NonNull private final Listener mListener;
 
-	@NonNull private final SimpleExoPlayer mVideoPlayer;
+	@NonNull private final ExoPlayer mVideoPlayer;
 
 	@Nullable private final RelativeLayout mControlView;
 
@@ -79,9 +77,11 @@ public class ExoPlayerWrapperView extends FrameLayout {
 		super(context);
 		mListener = listener;
 
-		final DefaultTrackSelector trackSelector = new DefaultTrackSelector();
+		final DefaultTrackSelector trackSelector = new DefaultTrackSelector(context);
 
-		mVideoPlayer = ExoPlayerFactory.newSimpleInstance(context, trackSelector);
+		mVideoPlayer = new ExoPlayer.Builder(context)
+				.setTrackSelector(trackSelector)
+				.build();
 
 		final PlayerView videoPlayerView = new PlayerView(context);
 
@@ -91,7 +91,10 @@ public class ExoPlayerWrapperView extends FrameLayout {
 		videoPlayerView.setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS);
 		videoPlayerView.requestFocus();
 
-		mVideoPlayer.prepare(mediaSource);
+		mVideoPlayer.setMediaSource(mediaSource);
+		mVideoPlayer.prepare();
+
+		mVideoPlayer.setRepeatMode(Player.REPEAT_MODE_ONE);
 
 		mVideoPlayer.setPlayWhenReady(true);
 		videoPlayerView.setUseController(false);
@@ -131,7 +134,7 @@ public class ExoPlayerWrapperView extends FrameLayout {
 			addButton(createButton(
 					context,
 					mControlView,
-					R.drawable.exo_controls_previous,
+					R.drawable.icon_previous,
 					R.string.video_restart,
 					view -> {
 						mVideoPlayer.seekTo(0);
@@ -141,7 +144,7 @@ public class ExoPlayerWrapperView extends FrameLayout {
 			addButton(createButton(
 					context,
 					mControlView,
-					R.drawable.exo_controls_rewind,
+					R.drawable.icon_rewind,
 					R.string.video_rewind,
 					view -> {
 						if(mVideoPlayer.getCurrentPosition() > 3000) {
@@ -159,19 +162,19 @@ public class ExoPlayerWrapperView extends FrameLayout {
 				playButton.set(createButton(
 						context,
 						mControlView,
-						R.drawable.exo_controls_pause,
+						R.drawable.icon_pause,
 						R.string.video_pause,
 						view -> {
 							mVideoPlayer.setPlayWhenReady(!mVideoPlayer.getPlayWhenReady());
 
 							if(mVideoPlayer.getPlayWhenReady()) {
 								playButton.get()
-										.setImageResource(R.drawable.exo_controls_pause);
+										.setImageResource(R.drawable.icon_pause);
 								playButton.get().setContentDescription(
 										context.getString(R.string.video_pause));
 							} else {
 								playButton.get()
-										.setImageResource(R.drawable.exo_controls_play);
+										.setImageResource(R.drawable.icon_play);
 								playButton.get().setContentDescription(
 										context.getString(R.string.video_play));
 							}
@@ -185,7 +188,7 @@ public class ExoPlayerWrapperView extends FrameLayout {
 			addButton(createButton(
 					context,
 					mControlView,
-					R.drawable.exo_controls_fastforward,
+					R.drawable.icon_fastforward,
 					R.string.video_fast_forward,
 					view -> {
 						mVideoPlayer.seekTo(mVideoPlayer.getCurrentPosition() + 3000);
@@ -301,29 +304,19 @@ public class ExoPlayerWrapperView extends FrameLayout {
 				ViewGroup.LayoutParams.MATCH_PARENT,
 				ViewGroup.LayoutParams.MATCH_PARENT));
 
-		mVideoPlayer.addListener(new Player.EventListener() {
+		mVideoPlayer.addListener(new Player.Listener() {
 			@Override
-			public void onPlayerStateChanged(
-					final boolean playWhenReady,
-					final int playbackState) {
-
-				// Loop
-				if(playbackState == Player.STATE_ENDED) {
-					mVideoPlayer.seekTo(0);
-				}
-
-				updateProgress();
-			}
-
-			@Override
-			public void onPlayerError(final ExoPlaybackException error) {
-
+			public void onPlayerError(@NonNull final PlaybackException error) {
 				Log.e(TAG, "ExoPlayer error", error);
 				mListener.onError();
 			}
 
 			@Override
-			public void onSeekProcessed() {
+			public void onPositionDiscontinuity(
+					@NonNull final Player.PositionInfo oldPosition,
+					@NonNull final Player.PositionInfo newPosition,
+					final int reason) {
+
 				updateProgress();
 			}
 		});
@@ -399,9 +392,9 @@ public class ExoPlayerWrapperView extends FrameLayout {
 				mTimeBarView.setPosition(currentPositionMs);
 				mTimeBarView.setBufferedPosition(mVideoPlayer.getBufferedPosition());
 
-				final String newText = RRTime.msToMinutesAndSecondsString(currentPositionMs)
+				final String newText = msToMinutesAndSecondsString(currentPositionMs)
 						+ " / "
-						+ RRTime.msToMinutesAndSecondsString(durationMs);
+						+ msToMinutesAndSecondsString(durationMs);
 
 				if(!newText.contentEquals(mTimeTextView.getText())) {
 					mTimeTextView.setText(newText);
@@ -425,5 +418,20 @@ public class ExoPlayerWrapperView extends FrameLayout {
 
 	public int isControlViewVisible() {
 		return mControlView != null ? mControlView.getVisibility() : GONE;
+	}
+
+	@NonNull
+	public static String msToMinutesAndSecondsString(final long ms) {
+
+		if(ms < 0) {
+			return "<negative time>";
+		}
+
+		final int secondsTotal = (int)(ms / 1000);
+
+		final int mins = secondsTotal / 60;
+		final int secs = secondsTotal % 60;
+
+		return String.format(Locale.US, "%d:%02d", mins, secs);
 	}
 }

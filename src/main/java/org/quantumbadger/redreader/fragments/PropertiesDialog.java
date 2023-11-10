@@ -17,7 +17,6 @@
 
 package org.quantumbadger.redreader.fragments;
 
-import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.res.TypedArray;
@@ -28,17 +27,17 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatDialogFragment;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.textview.MaterialTextView;
 import org.quantumbadger.redreader.R;
 import org.quantumbadger.redreader.activities.BaseActivity;
 import org.quantumbadger.redreader.common.General;
 
-import java.util.Locale;
-
 public abstract class PropertiesDialog extends AppCompatDialogFragment {
 
-	protected int rrListHeaderTextCol;
-	protected int rrListDividerCol;
+	protected int colorPrimary;
 	protected int rrCommentBodyCol;
 
 	// Workaround for HoloEverywhere bug?
@@ -63,21 +62,22 @@ public abstract class PropertiesDialog extends AppCompatDialogFragment {
 		final BaseActivity activity = (BaseActivity)getActivity();
 
 		final TypedArray attr = activity.obtainStyledAttributes(new int[] {
-				R.attr.rrListHeaderTextCol,
-				R.attr.rrListDividerCol,
+				R.attr.colorPrimary,
 				R.attr.rrMainTextCol
 		});
 
-		rrListHeaderTextCol = attr.getColor(0, 0);
-		rrListDividerCol = attr.getColor(1, 0);
-		rrCommentBodyCol = attr.getColor(2, 0);
+		colorPrimary = attr.getColor(0, 0);
+		rrCommentBodyCol = attr.getColor(1, 0);
 
 		attr.recycle();
 
-		final AlertDialog.Builder builder = new AlertDialog.Builder(activity);
+		final MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(activity);
 
 		final LinearLayout items = new LinearLayout(activity);
 		items.setOrientation(LinearLayout.VERTICAL);
+
+		final int hPaddingPx = General.dpToPixels(activity, 12);
+		items.setPadding(hPaddingPx, 0, hPaddingPx, 0);
 
 		prepare(activity, items);
 		builder.setTitle(getTitle(activity));
@@ -93,7 +93,7 @@ public abstract class PropertiesDialog extends AppCompatDialogFragment {
 		return builder.create();
 	}
 
-	protected void interceptBuilder(@NonNull final AlertDialog.Builder builder) {
+	protected void interceptBuilder(@NonNull final MaterialAlertDialogBuilder builder) {
 		// Do nothing by default
 	}
 
@@ -112,7 +112,7 @@ public abstract class PropertiesDialog extends AppCompatDialogFragment {
 	protected final LinearLayout propView(
 			final Context context,
 			final int titleRes,
-			final CharSequence text,
+			@Nullable final CharSequence text,
 			final boolean firstInList) {
 		return propView(context, context.getString(titleRes), text, firstInList);
 	}
@@ -121,7 +121,7 @@ public abstract class PropertiesDialog extends AppCompatDialogFragment {
 	protected final LinearLayout propView(
 			final Context context,
 			final String title,
-			final CharSequence text,
+			@Nullable final CharSequence text,
 			final boolean firstInList) {
 
 		final int paddingPixels = General.dpToPixels(context, 12);
@@ -129,25 +129,18 @@ public abstract class PropertiesDialog extends AppCompatDialogFragment {
 		final LinearLayout prop = new LinearLayout(context);
 		prop.setOrientation(LinearLayout.VERTICAL);
 
-		if(!firstInList) {
-			final View divider = new View(context);
-			divider.setMinimumHeight(General.dpToPixels(context, 1));
-			divider.setBackgroundColor(rrListDividerCol);
-			prop.addView(divider);
-		}
-
-		final TextView titleView = new TextView(context);
-		titleView.setText(title.toUpperCase(Locale.getDefault()));
-		titleView.setTextColor(rrListHeaderTextCol);
-		titleView.setTextSize(12.0f);
+		final TextView titleView = new MaterialTextView(context);
+		titleView.setText(title);
+		titleView.setTextColor(colorPrimary);
+		titleView.setTextSize(14.0f);
 		titleView.setPadding(paddingPixels, paddingPixels, paddingPixels, 0);
 		prop.addView(titleView);
 
-		final TextView textView = new TextView(context);
-		textView.setText(text);
+		final TextView textView = new MaterialTextView(context);
+		textView.setText(text == null ? "<null>" : text);
 		textView.setTextColor(rrCommentBodyCol);
-		textView.setTextSize(15.0f);
-		textView.setPadding(paddingPixels, 0, paddingPixels, paddingPixels);
+		textView.setTextSize(16.0f);
+		textView.setPadding(paddingPixels, 0, paddingPixels, 0);
 		textView.setTextIsSelectable(true);
 		prop.addView(textView);
 

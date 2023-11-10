@@ -38,6 +38,8 @@ public class ImageInfo implements Parcelable {
 	public final String title;
 	public final String caption;
 
+	public final String outboundUrl;
+
 	public final String type;
 	public final Boolean isAnimated;
 
@@ -92,6 +94,7 @@ public class ImageInfo implements Parcelable {
 		urlBigSquare = null;
 		title = null;
 		caption = null;
+		outboundUrl = null;
 		type = null;
 		isAnimated = null;
 		width = null;
@@ -110,6 +113,7 @@ public class ImageInfo implements Parcelable {
 		urlAudioStream = ParcelHelper.readNullableString(in);
 		title = ParcelHelper.readNullableString(in);
 		caption = ParcelHelper.readNullableString(in);
+		outboundUrl = ParcelHelper.readNullableString(in);
 		type = ParcelHelper.readNullableString(in);
 		isAnimated = ParcelHelper.readNullableBoolean(in);
 		width = ParcelHelper.readNullableLong(in);
@@ -127,6 +131,7 @@ public class ImageInfo implements Parcelable {
 			final String urlBigSquare,
 			final String title,
 			final String caption,
+			final String outboundUrl,
 			final String type,
 			final Boolean isAnimated,
 			final Long width,
@@ -143,6 +148,7 @@ public class ImageInfo implements Parcelable {
 		this.urlAudioStream = null;
 		this.title = title;
 		this.caption = caption;
+		this.outboundUrl = outboundUrl;
 		this.type = type;
 		this.isAnimated = isAnimated;
 		this.width = width;
@@ -189,6 +195,7 @@ public class ImageInfo implements Parcelable {
 				urlOriginal,
 				null,
 				title,
+				null,
 				null,
 				"video/mp4",
 				true,
@@ -241,6 +248,7 @@ public class ImageInfo implements Parcelable {
 
 		return new ImageInfo(
 				urlOriginal,
+				null,
 				null,
 				null,
 				null,
@@ -303,6 +311,7 @@ public class ImageInfo implements Parcelable {
 				urlBigSquare,
 				title,
 				caption,
+				null,
 				type,
 				isAnimated,
 				width,
@@ -368,6 +377,7 @@ public class ImageInfo implements Parcelable {
 				thumbnailUrl,
 				title,
 				caption,
+				null,
 				type,
 				isAnimated,
 				width,
@@ -415,6 +425,7 @@ public class ImageInfo implements Parcelable {
 				thumbnailUrl,
 				title,
 				tags,
+				null,
 				type,
 				false,
 				width,
@@ -423,6 +434,37 @@ public class ImageInfo implements Parcelable {
 				MediaType.IMAGE,
 				HasAudio.NO_AUDIO,
 				null,
+				null,
+				null);
+	}
+
+	public static ImageInfo parseRedgifsV2(final JsonObject object) {
+
+		final Long width = object.getLong("width");
+		final Long height = object.getLong("height");
+
+		final String urlOriginal = object.getStringAtPath("urls", "hd")
+				.orElse(object.getStringAtPath("urls", "sd"))
+				.orThrow(() -> new RuntimeException("No URL found"));
+
+		@Nullable final Boolean hasAudio = object.getBoolean("hasAudio");
+
+		@Nullable final String urlPreview = object.getStringAtPath("urls", "poster").orElseNull();
+
+		return new ImageInfo(
+				urlOriginal,
+				null,
+				null,
+				null,
+				null,
+				"video/mp4",
+				true,
+				width,
+				height,
+				null,
+				MediaType.VIDEO,
+				HasAudio.fromBoolean(hasAudio),
+				urlPreview,
 				null,
 				null);
 	}
@@ -440,6 +482,7 @@ public class ImageInfo implements Parcelable {
 		ParcelHelper.writeNullableString(parcel, urlAudioStream);
 		ParcelHelper.writeNullableString(parcel, title);
 		ParcelHelper.writeNullableString(parcel, caption);
+		ParcelHelper.writeNullableString(parcel, outboundUrl);
 		ParcelHelper.writeNullableString(parcel, type);
 		ParcelHelper.writeNullableBoolean(parcel, isAnimated);
 		ParcelHelper.writeNullableLong(parcel, width);

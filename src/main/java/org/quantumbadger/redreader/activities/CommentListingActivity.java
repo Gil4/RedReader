@@ -31,6 +31,7 @@ import org.quantumbadger.redreader.common.DialogUtils;
 import org.quantumbadger.redreader.common.General;
 import org.quantumbadger.redreader.common.LinkHandler;
 import org.quantumbadger.redreader.common.PrefsUtility;
+import org.quantumbadger.redreader.common.time.TimestampUTC;
 import org.quantumbadger.redreader.fragments.CommentListingFragment;
 import org.quantumbadger.redreader.fragments.SessionListDialog;
 import org.quantumbadger.redreader.listingcontrollers.CommentListingController;
@@ -243,7 +244,7 @@ public class CommentListingActivity extends RefreshableActivity
 	public void onSessionChanged(
 			final UUID session,
 			final SessionChangeType type,
-			final long timestamp) {
+			final TimestampUTC timestamp) {
 
 		Log.i(
 				TAG,
@@ -281,5 +282,14 @@ public class CommentListingActivity extends RefreshableActivity
 	@Override
 	public OptionsMenuUtility.Sort getCommentSort() {
 		return controller.getSort();
+	}
+
+	@Override
+	public PostCommentSort getSuggestedCommentSort() {
+		if(mFragment == null || mFragment.getPost() == null) {
+			return null;
+		}
+
+		return mFragment.getPost().src.getSuggestedCommentSort();
 	}
 }

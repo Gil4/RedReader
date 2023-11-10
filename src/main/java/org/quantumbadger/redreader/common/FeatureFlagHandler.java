@@ -17,12 +17,12 @@
 
 package org.quantumbadger.redreader.common;
 
-import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.StringRes;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import org.quantumbadger.redreader.R;
 import org.quantumbadger.redreader.activities.BaseActivity;
 import org.quantumbadger.redreader.cache.CacheManager;
@@ -48,7 +48,10 @@ public final class FeatureFlagHandler {
 
 		COMMENT_HEADER_SUBREDDIT_FEATURE("commentHeaderSubredditFeature"),
 		CONTROVERSIAL_DATE_SORTS_FEATURE("controversialDateSortsFeature"),
-		HIDE_STATUS_BAR_FOR_MEDIA_FEATURE("hideStatusBarForMediaFeature");
+		HIDE_STATUS_BAR_FOR_MEDIA_FEATURE("hideStatusBarForMediaFeature"),
+		REPLY_IN_POST_ACTION_MENU_FEATURE("replyInPostActionMenuFeature"),
+		MAIN_MENU_FIND_SUBREDDIT_FEATURE("mainMenuFindSubreddit"),
+		OPEN_COMMENT_EXTERNALLY_FEATURE("openCommentExternallyFeature");
 
 		@NonNull private final String id;
 
@@ -202,6 +205,65 @@ public final class FeatureFlagHandler {
 							.apply();
 				}
 			}
+
+			if(getAndSetFeatureFlag(prefs, FeatureFlag.REPLY_IN_POST_ACTION_MENU_FEATURE)
+					== FeatureFlagStatus.UPGRADE_NEEDED) {
+
+				Log.i(TAG, "Upgrading, add reply button to post action menu.");
+
+				final Set<String> existingPostActionMenuItems = getStringSet(
+						R.string.pref_menus_post_context_items_key,
+						R.array.pref_menus_post_context_items_default,
+						context,
+						prefs);
+
+				existingPostActionMenuItems.add("reply");
+
+				prefs.edit()
+						.putStringSet(
+								context.getString(
+										R.string.pref_menus_post_context_items_key),
+								existingPostActionMenuItems)
+						.apply();
+			}
+
+			if(getAndSetFeatureFlag(prefs, FeatureFlag.MAIN_MENU_FIND_SUBREDDIT_FEATURE)
+					== FeatureFlagStatus.UPGRADE_NEEDED) {
+
+				Log.i(TAG, "Upgrading, add find subreddit to main menu.");
+
+				final Set<String> existingShortcutPreferences
+						= PrefsUtility.getStringSet(
+								R.string.pref_menus_mainmenu_shortcutitems_key,
+								R.array.pref_menus_mainmenu_shortcutitems_items_default
+				);
+
+				existingShortcutPreferences.add("subreddit_search");
+
+				prefs.edit().putStringSet(
+						context.getString(R.string.pref_menus_mainmenu_shortcutitems_key),
+						existingShortcutPreferences).apply();
+			}
+
+			if(getAndSetFeatureFlag(prefs, FeatureFlag.OPEN_COMMENT_EXTERNALLY_FEATURE)
+					== FeatureFlagStatus.UPGRADE_NEEDED) {
+
+				Log.i(TAG, "Upgrading, add external browser option to comment action menu.");
+
+				final Set<String> existingCommentActionMenuItems = getStringSet(
+						R.string.pref_menus_comment_context_items_key,
+						R.array.pref_menus_comment_context_items_return,
+						context,
+						prefs);
+
+				existingCommentActionMenuItems.add("external");
+
+				prefs.edit()
+						.putStringSet(
+								context.getString(R.string.pref_menus_comment_context_items_key),
+								existingCommentActionMenuItems)
+						.apply();
+			}
 		});
 	}
 
@@ -252,14 +314,12 @@ public final class FeatureFlagHandler {
 		if(lastVersion < 63) {
 			// Upgrading across the 1.9.0 boundary (when oAuth was introduced)
 
-			new AlertDialog.Builder(activity)
+			new MaterialAlertDialogBuilder(activity)
 					.setTitle(R.string.firstrun_login_title)
 					.setMessage(R.string.upgrade_v190_login_message)
 					.setPositiveButton(
 							R.string.firstrun_login_button_now,
-							(dialog, which) -> new AccountListDialog().show(
-									activity.getSupportFragmentManager(),
-									null))
+							(dialog, which) -> AccountListDialog.show(activity))
 					.setNegativeButton(R.string.firstrun_login_button_later, null)
 					.show();
 		}

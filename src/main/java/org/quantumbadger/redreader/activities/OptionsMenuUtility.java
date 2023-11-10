@@ -18,7 +18,6 @@
 package org.quantumbadger.redreader.activities;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Point;
@@ -27,7 +26,9 @@ import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.WindowManager;
 import androidx.annotation.StringRes;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import org.quantumbadger.redreader.R;
 import org.quantumbadger.redreader.account.RedditAccount;
 import org.quantumbadger.redreader.account.RedditAccountManager;
@@ -598,9 +599,7 @@ public final class OptionsMenuUtility {
 								? R.string.options_account_manager
 								: R.string.options_accounts))
 						.setOnMenuItemClickListener(item -> {
-							new AccountListDialog().show(
-									activity.getSupportFragmentManager(),
-									null);
+							AccountListDialog.show(activity);
 							return true;
 						});
 
@@ -684,8 +683,8 @@ public final class OptionsMenuUtility {
 								}
 							}
 
-							final AlertDialog.Builder dialog
-									= new AlertDialog.Builder(activity);
+							final MaterialAlertDialogBuilder dialog
+									= new MaterialAlertDialogBuilder(activity);
 							dialog.setTitle(R.string.pref_appearance_theme_title);
 
 							dialog.setSingleChoiceItems(
@@ -1033,6 +1032,11 @@ public final class OptionsMenuUtility {
 		}
 
 		boolean equalsBaseAndType(final Sort sort) {
+
+			if(sort == null) {
+				return false;
+			}
+
 			if(!sort.getClass().equals(sorts[0].getClass())) {
 				return false;
 			}
@@ -1234,7 +1238,17 @@ public final class OptionsMenuUtility {
 			final Menu menu,
 			final Sort order) {
 
-		final MenuItem menuItem = menu.add(activity.getString(order.getMenuTitle()))
+		@StringRes final int menuTitle;
+		if(activity instanceof OptionsMenuCommentsListener
+				&& ((OptionsMenuCommentsListener)activity).getSuggestedCommentSort() != null
+				&& ((OptionsMenuCommentsListener)activity).getSuggestedCommentSort()
+				.equals(order)) {
+			menuTitle = ((PostCommentSort)order).getSuggestedTitle();
+		} else {
+			menuTitle = order.getMenuTitle();
+		}
+
+		final MenuItem menuItem = menu.add(activity.getString(menuTitle))
 				.setOnMenuItemClickListener(item -> {
 					order.onSortSelected(activity);
 					return true;
@@ -1436,5 +1450,7 @@ public final class OptionsMenuUtility {
 		void onSearchComments();
 
 		Sort getCommentSort();
+
+		PostCommentSort getSuggestedCommentSort();
 	}
 }

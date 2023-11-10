@@ -36,9 +36,9 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import android.widget.Toast;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import org.quantumbadger.redreader.R;
 import org.quantumbadger.redreader.activities.BaseActivity;
 import org.quantumbadger.redreader.cache.CacheManager;
@@ -46,9 +46,11 @@ import org.quantumbadger.redreader.common.AndroidCommon;
 import org.quantumbadger.redreader.common.General;
 import org.quantumbadger.redreader.common.LinkHandler;
 import org.quantumbadger.redreader.common.PrefsUtility;
+import org.quantumbadger.redreader.common.time.TimestampUTC;
+import org.quantumbadger.redreader.reddit.api.RedditPostActions;
+import org.quantumbadger.redreader.reddit.kthings.RedditPost;
 import org.quantumbadger.redreader.reddit.prepared.RedditParsedPost;
 import org.quantumbadger.redreader.reddit.prepared.RedditPreparedPost;
-import org.quantumbadger.redreader.reddit.things.RedditPost;
 import org.quantumbadger.redreader.reddit.url.RedditURLParser;
 import org.quantumbadger.redreader.views.RedditPostView;
 import org.quantumbadger.redreader.views.bezelmenu.BezelSwipeOverlay;
@@ -137,7 +139,7 @@ public class WebViewFragment extends Fragment
 					CacheManager.getInstance(mActivity),
 					0,
 					parsedPost,
-					-1,
+					TimestampUTC.ZERO,
 					false,
 					false,
 					false,
@@ -220,7 +222,7 @@ public class WebViewFragment extends Fragment
 
 		/*handle download links show an alert box to load this outside the internal browser*/
 		webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength)
-				-> new AlertDialog.Builder(mActivity)
+				-> new MaterialAlertDialogBuilder(mActivity)
 						.setTitle(R.string.download_link_title)
 						.setMessage(R.string.download_link_message)
 						.setPositiveButton(
@@ -474,7 +476,8 @@ public class WebViewFragment extends Fragment
 						@Override
 						public boolean onSwipe(@BezelSwipeOverlay.SwipeEdge final int edge) {
 
-							toolbarOverlay.setContents(post.generateToolbar(
+							toolbarOverlay.setContents(RedditPostActions.INSTANCE.generateToolbar(
+									post,
 									mActivity,
 									false,
 									toolbarOverlay));

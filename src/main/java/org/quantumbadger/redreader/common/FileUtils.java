@@ -39,13 +39,14 @@ import org.quantumbadger.redreader.R;
 import org.quantumbadger.redreader.account.RedditAccountManager;
 import org.quantumbadger.redreader.activities.BaseActivity;
 import org.quantumbadger.redreader.activities.BugReportActivity;
+import org.quantumbadger.redreader.cache.CacheCompressionType;
 import org.quantumbadger.redreader.cache.CacheContentProvider;
 import org.quantumbadger.redreader.cache.CacheManager;
 import org.quantumbadger.redreader.cache.CacheRequest;
 import org.quantumbadger.redreader.cache.CacheRequestCallbacks;
 import org.quantumbadger.redreader.cache.downloadstrategy.DownloadStrategyIfNotCached;
+import org.quantumbadger.redreader.common.time.TimestampUTC;
 import org.quantumbadger.redreader.fragments.ShareOrderDialog;
-import org.quantumbadger.redreader.http.FailedRequestBody;
 import org.quantumbadger.redreader.image.GetImageInfoListener;
 import org.quantumbadger.redreader.image.ImageInfo;
 import org.quantumbadger.redreader.image.LegacySaveImageCallback;
@@ -58,6 +59,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.util.HashMap;
+import java.util.Objects;
 import java.util.UUID;
 
 public class FileUtils {
@@ -221,7 +223,11 @@ public class FileUtils {
 
 	public static void shareImageAtUri(
 			@NonNull final BaseActivity activity,
-			@NonNull final String uri) {
+			@Nullable final String uri) {
+
+		if(uri == null) {
+			return;
+		}
 
 		downloadImageToSave(activity, uri, (info, cacheFile, mimetype) -> {
 
@@ -406,7 +412,11 @@ public class FileUtils {
 
 	public static void saveImageAtUri(
 			@NonNull final BaseActivity activity,
-			@NonNull final String uri) {
+			@Nullable final String uri) {
+
+		if(uri == null) {
+			return;
+		}
 
 		if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 
@@ -508,6 +518,116 @@ public class FileUtils {
 				String mimetype);
 	}
 
+	@RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
+	private static void internalDownloadImageToSaveAudio(
+			@NonNull final BaseActivity activity,
+			@NonNull final ImageInfo info,
+			@NonNull final CacheManager.ReadableCacheFile video,
+			@NonNull final DownloadImageToSaveSuccessCallback callback) {
+
+		final CacheManager cacheManager = CacheManager.getInstance(activity);
+
+		cacheManager.makeRequest(new CacheRequest(
+				General.uriFromString(info.urlAudioStream),
+				RedditAccountManager.getAnon(),
+				null,
+				new Priority(Constants.Priority.IMAGE_VIEW),
+				DownloadStrategyIfNotCached.INSTANCE,
+				Constants.FileType.IMAGE,
+				CacheRequest.DOWNLOAD_QUEUE_IMMEDIATE,
+				activity,
+				new CacheRequestCallbacks() {
+					@Override
+					public void onDownloadNecessary() {
+					}
+
+					@Override
+					public void onFailure(@NonNull final RRError error) {
+						General.showResultDialog(activity, error);
+					}
+
+					@Override
+					public void onCacheFileWritten(
+							@NonNull final CacheManager.ReadableCacheFile cacheFile,
+							final TimestampUTC timestamp,
+							@NonNull final UUID session,
+							final boolean fromCache,
+							final String mimetype) {
+
+						try {
+							final CacheManager.WritableCacheFile output
+									= cacheManager.openNewCacheFile(
+											Objects.requireNonNull(General.uriFromString(
+													"redreader://muxedmedia/"
+															+ UUID.randomUUID()
+															+ ".mp4")),
+											RedditAccountManager.getAnon(),
+											Constants.FileType.IMAGE,
+											session,
+											"video/mp4",
+											CacheCompressionType.NONE);
+
+							final File file = output.writeExternally();
+
+							MediaUtils.muxFiles(
+									file,
+									new File[] {
+											cacheFile.getFile().orThrow(() -> new RuntimeException(
+													"Audio file not found")),
+											video.getFile().orThrow(() -> new RuntimeException(
+													"Video file not found"))
+									},
+									() -> {
+
+										try {
+											output.onWriteFinished();
+
+											callback.onSuccess(
+													info,
+													output.getReadableCacheFile(),
+													"video/mp4");
+
+										} catch(final Exception e) {
+											General.showResultDialog(
+													activity,
+													General.getGeneralErrorForFailure(
+															activity,
+															CacheRequest.REQUEST_FAILURE_STORAGE,
+															e,
+															null,
+															info.urlOriginal,
+															Optional.empty()));
+										}
+									},
+
+									e -> General.showResultDialog(
+											activity,
+											new RRError(
+													activity.getResources().getString(
+															R.string.error_title_muxing_failed),
+													activity.getResources().getString(
+															R.string.error_message_muxing_failed),
+													true,
+													e,
+													null,
+													info.urlOriginal,
+													null)));
+
+						} catch(final Exception e) {
+							General.showResultDialog(
+									activity,
+									General.getGeneralErrorForFailure(
+											activity,
+											CacheRequest.REQUEST_FAILURE_STORAGE,
+											e,
+											null,
+											info.urlOriginal,
+											Optional.empty()));
+						}
+					}
+				}));
+	}
+
 	public static void downloadImageToSave(
 			@NonNull final BaseActivity activity,
 			@NonNull final String uri,
@@ -520,19 +640,7 @@ public class FileUtils {
 				new GetImageInfoListener() {
 
 					@Override
-					public void onFailure(
-							final @CacheRequest.RequestFailureType int type,
-							final Throwable t,
-							final Integer status,
-							final String readableMessage,
-							@NonNull final Optional<FailedRequestBody> body) {
-						final RRError error = General.getGeneralErrorForFailure(
-								activity,
-								type,
-								t,
-								status,
-								uri,
-								body);
+					public void onFailure(@NonNull final RRError error) {
 						General.showResultDialog(activity, error);
 					}
 
@@ -558,33 +666,31 @@ public class FileUtils {
 									}
 
 									@Override
-									public void onFailure(
-											@CacheRequest.RequestFailureType final int type,
-											final Throwable t,
-											final Integer status,
-											final String readableMessage,
-											@NonNull final Optional<FailedRequestBody> body) {
-
-										General.showResultDialog(
-												activity,
-												General.getGeneralErrorForFailure(
-														activity,
-														type,
-														t,
-														status,
-														info.urlOriginal,
-														body));
+									public void onFailure(@NonNull final RRError error) {
+										General.showResultDialog(activity, error);
 									}
 
 									@Override
 									public void onCacheFileWritten(
 											@NonNull final CacheManager.ReadableCacheFile cacheFile,
-											final long timestamp,
+											final TimestampUTC timestamp,
 											@NonNull final UUID session,
 											final boolean fromCache,
 											final String mimetype) {
 
-										callback.onSuccess(info, cacheFile, mimetype);
+										if(info.urlAudioStream != null
+												&& Build.VERSION.SDK_INT >= 18) {
+											Log.i(TAG, "Also downloading audio stream...");
+
+											internalDownloadImageToSaveAudio(
+													activity,
+													info,
+													cacheFile,
+													callback);
+
+										} else {
+											callback.onSuccess(info, cacheFile, mimetype);
+										}
 									}
 								}));
 
