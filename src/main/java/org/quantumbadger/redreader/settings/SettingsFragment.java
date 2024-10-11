@@ -17,15 +17,17 @@
 
 package org.quantumbadger.redreader.settings;
 
+import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
-import android.os.Build;
 import android.os.Bundle;
 import android.text.Html;
+import android.util.Log;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+
 import androidx.annotation.StringRes;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.FragmentActivity;
@@ -36,7 +38,9 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceGroup;
 import androidx.preference.PreferenceScreen;
+
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
 import org.quantumbadger.redreader.BuildConfig;
 import org.quantumbadger.redreader.R;
 import org.quantumbadger.redreader.RedReader;
@@ -55,6 +59,7 @@ import org.quantumbadger.redreader.common.PrefsUtility;
 import org.quantumbadger.redreader.common.TorCommon;
 import org.quantumbadger.redreader.common.time.TimeDuration;
 import org.quantumbadger.redreader.common.time.TimestampUTC;
+import org.quantumbadger.redreader.receivers.NewMessageChecker;
 import org.quantumbadger.redreader.reddit.prepared.RedditChangeDataManager;
 
 import java.io.File;
@@ -175,7 +180,8 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 				R.string.pref_accessibility_min_comment_height_key,
 				R.string.pref_appearance_android_status_key,
 				R.string.pref_behaviour_collapse_sticky_comments_key,
-				R.string.pref_behaviour_sharing_domain_key
+				R.string.pref_behaviour_sharing_domain_key,
+				R.string.pref_behaviour_post_tap_action_key
 		};
 
 		final int[] editTextPrefsToUpdate = {
@@ -229,7 +235,35 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 			});
 		}
 
+		{
+			final CheckBoxPreference notifPref =
+					findPreference(getString(R.string.pref_behaviour_notifications_key));
 
+			if (notifPref != null) {
+				notifPref.setOnPreferenceChangeListener((preference, newValue) -> {
+
+					final Activity activity = getActivity();
+
+					if (activity instanceof BaseActivity) {
+						// Delay this because the preference hasn't taken effect yet
+						AndroidCommon.UI_THREAD_HANDLER.postDelayed(() -> {
+							AndroidCommon.promptForNotificationPermission(
+									(BaseActivity) activity,
+									() -> {
+										notifPref.setChecked(false);
+									}
+							);
+						}, 300);
+					}
+
+					return true;
+				});
+			}
+		}
+
+
+		final Preference testNotificationPref =
+				findPreference(getString(R.string.pref_developer_test_notification_key));
 		final Preference versionPref =
 				findPreference(getString(R.string.pref_about_version_key));
 		final Preference changelogPref =
@@ -242,6 +276,18 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 				findPreference(getString(R.string.pref_item_backup_preferences_key));
 		final Preference restorePreferencesPref =
 				findPreference(getString(R.string.pref_item_restore_preferences_key));
+
+		if(testNotificationPref != null) {
+			testNotificationPref.setOnPreferenceClickListener(preference -> {
+				Log.i("SettingsFragment", "Showing test notification");
+				NewMessageChecker.createNotification(
+						"Test notification title",
+						"Test notification message",
+						context
+				);
+				return true;
+			});
+		}
 
 		if(versionPref != null) {
 			versionPref.setSummary(
@@ -286,16 +332,6 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 				final BaseActivity activity = (BaseActivity)getActivity();
 
 				if(activity == null) {
-					return true;
-				}
-
-				if(Build.VERSION.SDK_INT < 19) {
-
-					DialogUtils.showDialog(
-							activity,
-							R.string.backup_preferences_error_old_android_title,
-							R.string.backup_preferences_error_old_android_message);
-
 					return true;
 				}
 
@@ -351,16 +387,6 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 					return true;
 				}
 
-				if(Build.VERSION.SDK_INT < 19) {
-
-					DialogUtils.showDialog(
-							activity,
-							R.string.backup_preferences_error_old_android_title,
-							R.string.backup_preferences_error_old_android_message);
-
-					return true;
-				}
-
 				final Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT)
 						.setType("*/*")
 						.addCategory(Intent.CATEGORY_OPENABLE);
@@ -396,21 +422,6 @@ public final class SettingsFragment extends PreferenceFragmentCompat {
 
 				return true;
 			});
-		}
-
-		if(Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-
-			for(final int key : new int[] {
-					R.string.pref_appearance_navbar_color_key,
-					R.string.pref_behaviour_save_location_key}) {
-
-				final Preference pref = findPreference(getString(key));
-
-				if(pref != null) {
-					pref.setEnabled(false);
-					pref.setSummary(R.string.pref_not_supported_before_lollipop);
-				}
-			}
 		}
 
 		final Preference cacheLocationPref =

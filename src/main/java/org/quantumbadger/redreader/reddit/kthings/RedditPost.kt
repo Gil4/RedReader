@@ -18,8 +18,11 @@
 package org.quantumbadger.redreader.reddit.kthings
 
 import android.os.Parcelable
+import android.util.Log
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
+import org.quantumbadger.redreader.common.UriString
+import org.quantumbadger.redreader.image.RedditGalleryAPI
 import org.quantumbadger.redreader.reddit.things.RedditThingWithIdAndType
 
 @Suppress("PropertyName")
@@ -67,8 +70,37 @@ data class RedditPost(
 	val is_video: Boolean = false,
 
 	val distinguished: String? = null,
-	val suggested_sort: String? = null // TODO enum type
+	val suggested_sort: String? = null, // TODO enum type
+
+	@kotlinx.parcelize.IgnoredOnParcel
+	val media_metadata: Map<UrlEncodedString, MaybeParseError<RedditMediaMetadata>>? = null,
+	@kotlinx.parcelize.IgnoredOnParcel
+	val gallery_data: GalleryData? = null,
+
+	val removed_by_category: String? = null
+
 ) : RedditThingWithIdAndType, Parcelable {
+
+	init {
+		try {
+			RedditGalleryAPI.addToCache(this)
+		} catch (t: Throwable) {
+			Log.e("RedditPost", "Got error when adding post to cache", t)
+		}
+	}
+
+	@Serializable
+	data class GalleryData(
+		val items: List<MaybeParseError<GalleryItem>>
+	) {
+		@Serializable
+		@Parcelize
+		data class GalleryItem (
+			val media_id: UrlEncodedString,
+			val caption: UrlEncodedString? = null,
+			val outbound_url: UrlEncodedString? = null,
+		) : Parcelable
+	}
 
 	@Serializable
 	@Parcelize
@@ -137,5 +169,24 @@ data class RedditPost(
 
 	override fun getIdAndType(): RedditIdAndType {
 		return name
+	}
+
+	fun findUrl(): UriString? {
+
+		media?.reddit_video?.fallback_url?.decoded?.apply {
+			return UriString(this)
+		}
+
+		if (url?.decoded?.contains(".gif") == true) {
+			preview?.images?.get(0)?.variants?.mp4?.source?.url?.decoded?.apply {
+				return UriString(this)
+			}
+		}
+
+		url_overridden_by_dest?.decoded?.apply {
+			return UriString(this)
+		}
+
+		return url?.decoded?.let(::UriString)
 	}
 }

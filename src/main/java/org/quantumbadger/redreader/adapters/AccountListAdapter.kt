@@ -16,27 +16,31 @@
  ******************************************************************************/
 package org.quantumbadger.redreader.adapters
 
-import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.drawable.Drawable
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.annotation.StringRes
-import androidx.core.content.ContextCompat
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textview.MaterialTextView
 import org.quantumbadger.redreader.R
 import org.quantumbadger.redreader.account.RedditAccountManager
 import org.quantumbadger.redreader.activities.OAuthLoginActivity
 import org.quantumbadger.redreader.common.BetterSSB
+import org.quantumbadger.redreader.common.LinkHandler
+import org.quantumbadger.redreader.common.UriString
 import org.quantumbadger.redreader.reddit.api.RedditOAuth.needsRelogin
 import org.quantumbadger.redreader.viewholders.VH1Text
-import java.util.*
 
-class AccountListAdapter(private val context: Context, private val fragment: Fragment) :
+
+class AccountListAdapter(private val context: AppCompatActivity, private val fragment: Fragment) :
 	HeaderRecyclerAdapter<RecyclerView.ViewHolder?>() {
 	private val accounts = RedditAccountManager.getInstance(context).accounts
 	private val rrIconAdd: Drawable?
@@ -44,9 +48,9 @@ class AccountListAdapter(private val context: Context, private val fragment: Fra
 
 	init {
 		val attr = context.obtainStyledAttributes(intArrayOf(R.attr.rrIconAdd, R.attr.rrIconPerson))
-		rrIconAdd = ContextCompat.getDrawable(context, attr.getResourceId(0, 0))
+		rrIconAdd = AppCompatResources.getDrawable(context, attr.getResourceId(0, 0))
 		//noinspection ResourceType: bug in Lint
-		rrIconUser = ContextCompat.getDrawable(context, attr.getResourceId(1, 0))
+		rrIconUser = AppCompatResources.getDrawable(context, attr.getResourceId(1, 0))
 		attr.recycle()
 	}
 
@@ -73,19 +77,8 @@ class AccountListAdapter(private val context: Context, private val fragment: Fra
 	}
 
 	private fun showLoginWarningDialog() {
-		MaterialAlertDialogBuilder(context)
-			.setMessage(
-				String.format(
-					Locale.US,
-					"%s\n\n%s",
-					context.getString(
-						R.string.reddit_login_browser_popup_line_1
-					),
-					context.getString(
-						R.string.reddit_login_browser_popup_line_2_internal_browser_only
-					)
-				)
-			)
+		val dialog = MaterialAlertDialogBuilder(context)
+			.setView(R.layout.dialog_prelogin_prompt)
 			.setCancelable(true)
 			.setPositiveButton(
 				R.string.dialog_continue
@@ -94,6 +87,13 @@ class AccountListAdapter(private val context: Context, private val fragment: Fra
 				R.string.dialog_close
 			) { _: DialogInterface?, _: Int -> }
 			.show()
+
+		dialog.findViewById<MaterialTextView>(R.id.login_preprompt_help_link)!!.apply {
+			paintFlags = paintFlags or Paint.UNDERLINE_TEXT_FLAG
+			setOnClickListener {
+				LinkHandler.onLinkClicked(this@AccountListAdapter.context, UriString("https://redreader.org/loginhelp/"))
+			}
+		}
 	}
 
 	private fun launchLogin() {

@@ -19,9 +19,12 @@ package org.quantumbadger.redreader.reddit;
 
 import android.content.Context;
 import android.util.Log;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
+
+import org.apache.commons.text.StringEscapeUtils;
 import org.quantumbadger.redreader.account.RedditAccount;
 import org.quantumbadger.redreader.account.RedditAccountManager;
 import org.quantumbadger.redreader.activities.BaseActivity;
@@ -37,6 +40,7 @@ import org.quantumbadger.redreader.common.GenericFactory;
 import org.quantumbadger.redreader.common.PrefsUtility;
 import org.quantumbadger.redreader.common.Priority;
 import org.quantumbadger.redreader.common.RRError;
+import org.quantumbadger.redreader.common.UriString;
 import org.quantumbadger.redreader.common.datastream.SeekableInputStream;
 import org.quantumbadger.redreader.common.time.TimestampUTC;
 import org.quantumbadger.redreader.fragments.CommentListingFragment;
@@ -46,6 +50,7 @@ import org.quantumbadger.redreader.reddit.kthings.MaybeParseError;
 import org.quantumbadger.redreader.reddit.kthings.RedditComment;
 import org.quantumbadger.redreader.reddit.kthings.RedditFieldReplies;
 import org.quantumbadger.redreader.reddit.kthings.RedditListing;
+import org.quantumbadger.redreader.reddit.kthings.RedditMediaMetadata;
 import org.quantumbadger.redreader.reddit.kthings.RedditPost;
 import org.quantumbadger.redreader.reddit.kthings.RedditThing;
 import org.quantumbadger.redreader.reddit.kthings.RedditThingResponse;
@@ -58,7 +63,6 @@ import org.quantumbadger.redreader.reddit.prepared.RedditRenderableComment;
 import org.quantumbadger.redreader.reddit.url.RedditURLParser;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Map;
@@ -232,7 +236,7 @@ public class CommentListingRequest {
 	@NonNull
 	private CacheRequest createCommentListingCacheRequest() {
 
-		final URI url = General.uriFromString(mUrl.generateJsonUri().toString());
+		final UriString url = UriString.from(mUrl.generateJsonUri());
 
 		return new CacheRequest(
 				url,
@@ -241,7 +245,7 @@ public class CommentListingRequest {
 				new Priority(Constants.Priority.API_COMMENT_LIST),
 				mDownloadStrategy,
 				Constants.FileType.COMMENT_LIST,
-				CacheRequest.DOWNLOAD_QUEUE_REDDIT_API,
+				CacheRequest.DownloadQueueType.REDDIT_API,
 				mContext,
 				new CacheRequestCallbacks() {
 					@Override
@@ -276,10 +280,10 @@ public class CommentListingRequest {
 							} catch(final Exception e) {
 								onFailure(General.getGeneralErrorForFailure(
 										mContext,
-										CacheRequest.REQUEST_FAILURE_PARSE,
+										CacheRequest.RequestFailureType.PARSE,
 										e,
 										null,
-										url.toString(),
+										url,
 										FailedRequestBody.from(streamFactory)));
 							}
 						}, "Comment parsing", 1_000_000).start();
@@ -315,15 +319,15 @@ public class CommentListingRequest {
 
 					for(final Map.Entry<
 									UrlEncodedString,
-									MaybeParseError<RedditComment.EmoteMetadata>
+									MaybeParseError<RedditMediaMetadata>
 							> entry : comment.getMedia_metadata().entrySet()) {
 
 						if(!(entry.getValue() instanceof MaybeParseError.Ok)) {
 							continue;
 						}
 
-						final RedditComment.EmoteMetadata emoteMetadata
-								= ((MaybeParseError.Ok<RedditComment.EmoteMetadata>)
+						final RedditMediaMetadata emoteMetadata
+								= ((MaybeParseError.Ok<RedditMediaMetadata>)
 										entry.getValue()).getValue();
 
 						// id is always structured as emote|{subreddit_id}|{emote_id}
@@ -346,7 +350,8 @@ public class CommentListingRequest {
 
 							final String imgTag = String.format(Locale.getDefault(),
 									"<emote src=\"%s\" title=\"%s\"></emote>",
-									emoteMetadata.getS().getU(),
+									StringEscapeUtils.escapeHtml4(
+											emoteMetadata.getS().getU().getDecoded()),
 									emotePlaceholder);
 
 							comment = comment.copyWithNewBodyHtml(
@@ -373,19 +378,33 @@ public class CommentListingRequest {
 			final boolean neverAutoCollapse = mCommentListingURL != null
 					&& mCommentListingURL.pathType() == RedditURLParser.USER_COMMENT_LISTING_URL;
 
-			final RedditCommentListItem item = new RedditCommentListItem(
-					new RedditRenderableComment(
-							new RedditParsedComment(comment, mActivity),
-							parentPostAuthor,
-							minimumCommentScore,
-							currentCanonicalUserName,
-							true,
-							showSubredditName,
-							neverAutoCollapse),
+			final RedditCommentListItem item;
+			final RedditRenderableComment renderableComment = new RedditRenderableComment(
+					new RedditParsedComment(comment, mActivity),
+					parentPostAuthor,
+					minimumCommentScore,
+					currentCanonicalUserName,
+					true,
+					showSubredditName,
+					neverAutoCollapse);
+
+			if (comment.isBlockedByUser()
+					&& !PrefsUtility.pref_appearance_hide_comments_from_blocked_users()) {
+				renderableComment.setBlockedUser(true);
+			}
+
+			item = new RedditCommentListItem(
+					renderableComment,
 					parent,
 					mFragment,
 					mActivity,
 					mCommentListingURL);
+
+			// hide comment if user is blocked
+			if (comment.isBlockedByUser()
+					&& PrefsUtility.pref_appearance_hide_comments_from_blocked_users()) {
+				return;
+			}
 
 			output.add(item);
 

@@ -22,6 +22,7 @@ import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 import org.quantumbadger.redreader.common.LinkHandler
+import org.quantumbadger.redreader.common.UriString
 import org.quantumbadger.redreader.reddit.things.RedditThingWithIdAndType
 import org.quantumbadger.redreader.reddit.url.PostCommentListingURL
 
@@ -33,6 +34,7 @@ import org.quantumbadger.redreader.reddit.url.PostCommentListingURL
 data class RedditComment(
 	val body: UrlEncodedString? = null,
 	val body_html: UrlEncodedString? = null,
+	val COLLAPSED_REASON_BLOCKED_AUTHOR: String = "BLOCKED_AUTHOR",
 
 	val author: UrlEncodedString? = null,
 	val subreddit: UrlEncodedString? = null,
@@ -42,7 +44,7 @@ data class RedditComment(
 	val score_hidden: Boolean = false,
 	val locked: Boolean = false,
 	val can_mod_post: Boolean = false,
-	val media_metadata: Map<UrlEncodedString, MaybeParseError<EmoteMetadata>>? = null,
+	val media_metadata: Map<UrlEncodedString, MaybeParseError<RedditMediaMetadata>>? = null,
 
 	val replies: RedditFieldReplies = RedditFieldReplies.None,
 
@@ -66,31 +68,14 @@ data class RedditComment(
 
 	val distinguished: String? = null, // TODO enum? Test unknown values
 
-	val stickied: Boolean = false
+	val stickied: Boolean = false,
+
+	val collapsed_reason_code: String? = null
 
 ) : Parcelable, RedditThingWithIdAndType {
 
 	// TODO do this in the HTML parser instead
 	fun copyWithNewBodyHtml(value: String) = copy(body_html = UrlEncodedString(value))
-
-	@Serializable
-	@Parcelize
-	data class EmoteMetadata(
-		val status: String,
-		val e: String,
-		val m: String,
-		val s: ImageMetadata,
-		val t: String,
-		val id: String
-	) : Parcelable
-
-	@Serializable
-	@Parcelize
-	data class ImageMetadata(
-		val x: String,
-		val y: String,
-		val u: String? = null
-	) : Parcelable
 
 	override fun getIdAlone() = id
 
@@ -119,11 +104,19 @@ data class RedditComment(
 		)
 	}
 
-	fun computeAllLinks(): Set<String> {
+	fun computeAllLinks(): Set<UriString> {
 		return body_html?.decoded?.run { LinkHandler.computeAllLinks(this) } ?: emptySet()
+	}
+
+	fun computeAllLinksString(): List<String> {
+		return computeAllLinks().map { it.value }
 	}
 
 	fun wasEdited(): Boolean = edited != RedditFieldEdited.Bool(false)
 
 	fun isControversial(): Boolean = controversiality == 1
+
+	fun isBlockedByUser(): Boolean {
+		return COLLAPSED_REASON_BLOCKED_AUTHOR == collapsed_reason_code
+	}
 }

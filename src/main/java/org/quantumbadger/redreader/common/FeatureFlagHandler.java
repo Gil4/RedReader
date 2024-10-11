@@ -20,11 +20,14 @@ package org.quantumbadger.redreader.common;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.StringRes;
+import androidx.appcompat.app.AppCompatActivity;
+
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
 import org.quantumbadger.redreader.R;
-import org.quantumbadger.redreader.activities.BaseActivity;
 import org.quantumbadger.redreader.cache.CacheManager;
 import org.quantumbadger.redreader.fragments.AccountListDialog;
 import org.quantumbadger.redreader.fragments.ChangelogDialog;
@@ -51,7 +54,10 @@ public final class FeatureFlagHandler {
 		HIDE_STATUS_BAR_FOR_MEDIA_FEATURE("hideStatusBarForMediaFeature"),
 		REPLY_IN_POST_ACTION_MENU_FEATURE("replyInPostActionMenuFeature"),
 		MAIN_MENU_FIND_SUBREDDIT_FEATURE("mainMenuFindSubreddit"),
-		OPEN_COMMENT_EXTERNALLY_FEATURE("openCommentExternallyFeature");
+		OPEN_COMMENT_EXTERNALLY_FEATURE("openCommentExternallyFeature"),
+		POST_TITLE_TAP_ACTION_FEATURE("postTitleTapActionFeature"),
+		DEFAULT_PREF_VIDEO_PLAYBACK_CONTROLS("defaultPrefVideoPlaybackControls"),
+		DEFAULT_PREF_CUSTOM_TABS("defaultPrefCustomTabs");
 
 		@NonNull private final String id;
 
@@ -264,6 +270,43 @@ public final class FeatureFlagHandler {
 								existingCommentActionMenuItems)
 						.apply();
 			}
+
+			if(getAndSetFeatureFlag(prefs, FeatureFlag.POST_TITLE_TAP_ACTION_FEATURE)
+					== FeatureFlagStatus.UPGRADE_NEEDED) {
+
+				if(getBoolean(
+						R.string.pref_behaviour_post_title_opens_comments_key,
+						false,
+						context,
+						prefs
+				)) {
+					Log.i(TAG, "Updating new post tap action preference.");
+
+					prefs.edit().putString(
+							context.getString(R.string.pref_behaviour_post_tap_action_key),
+							"comments"
+					).apply();
+				}
+			}
+
+			if(getAndSetFeatureFlag(prefs, FeatureFlag.DEFAULT_PREF_VIDEO_PLAYBACK_CONTROLS)
+					== FeatureFlagStatus.UPGRADE_NEEDED) {
+
+				prefs.edit().putBoolean(
+						context.getString(R.string.pref_behaviour_video_playback_controls_key),
+						true)
+				.apply();
+			}
+
+			if(getAndSetFeatureFlag(prefs, FeatureFlag.DEFAULT_PREF_CUSTOM_TABS)
+					== FeatureFlagStatus.UPGRADE_NEEDED) {
+
+				prefs.edit()
+						.putBoolean(
+								context.getString(R.string.pref_behaviour_usecustomtabs_key),
+								true)
+						.apply();
+			}
 		});
 	}
 
@@ -301,7 +344,7 @@ public final class FeatureFlagHandler {
 
 
 	public static void handleLegacyUpgrade(
-			@NonNull final BaseActivity activity,
+			@NonNull final AppCompatActivity activity,
 			final int appVersion,
 			@NonNull final String versionName) {
 

@@ -1,6 +1,43 @@
+113/1.24.1
+Fix "Malformed URL" error for Imgur images (thanks to Alexey Rochev)
+Remove red background/border behind transparent images in the gallery
+Gallery theme fixes for devices which forcibly modify app colors in dark mode
+Fix for swiping between images when "Automatically open first album image" is enabled
+Enable haptics for long-clicking in gallery viewer
+
+112/1.24
+Improved gallery viewer with card, list, and grid modes
+Ability to block users in user profile (thanks to folkemat)
+Ability to upload an image when submitting a comment (thanks to folkemat)
+Preference change: video playback controls now enabled by default (Settings > Images/Video > Enable video playback controls)
+Preference change: custom tabs now enabled by default (Settings > Behaviour > Use Android Custom Tabs)
+Added accessibility actions for moving between top-level comments (thanks to codeofdusk)
+Dependency updates and reorganisation (thanks to Alexey Rochev)
+Migrating from ExoPlayer to Media3 (thanks to Alexey Rochev)
+Comments submitted by current user now have username highlighted (thanks to folkemat)
+Add Submitted Comments as an optional main menu user item (thanks to folkemat)
+Improved network performance
+Disable Custom Tabs if Tor is enabled
+Fixed issue with gesture cancellation in image viewer (thanks to Alexey Rochev)
+Fixed crash with some Reddit links in share format
+Fixed issue where some GIFs wouldn't play
+Support for Imgur album URLs containing title
+Renamed some menu items and labels for clarity
+Minimum supported Android version is now 5.0
+
+111/1.23.1
+Added a preference to automatically open the first image in an album
+Made links blue again in dark themes
+Added post tap action preference: open link, open comments, or use old "post title opens comments" behaviour
+Fixed long-click menu not appearing when post tap action changed from the default
+Reduced top and bottom margins on popup menus to avoid the need for scrolling
+Increase number of comments shown in user profile from 25 to 100
+
 109/1.23
+Significantly improved image gallery load speed
 Update to Material 3 design elements
 Visual refresh of user profile dialog
+Show notification permission prompt on Android 13 and above
 Hide keyboard in Find Location when search button is pressed (thanks to mattdbr)
 Fix issue with "Post title opens comments" not covering whole post area (thanks to Domenico Sibilio)
 Support for handling v.redd.it, video, and gallery links from other apps (thanks to gavtroy)
@@ -9,6 +46,7 @@ Ability to open comments in external browser (thanks to Cameron Merkel)
 Preference for domain when sharing Reddit links (thanks to Cameron Merkel)
 Handle Reddit galleries containing links, and show gallery thumbnails for small images (thanks to Cameron Merkel)
 Handle shared /s/ URLs correctly (thanks to Adam Williams)
+Added help page for people having trouble logging in
 Updated target SDK to 33
 
 108/1.22
