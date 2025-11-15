@@ -21,6 +21,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.res.Resources;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.MenuItem;
 
 import androidx.annotation.NonNull;
@@ -453,12 +454,6 @@ public final class PrefsUtility {
 				false);
 	}
 
-	public static boolean pref_show_random_main_menu() {
-		return getBoolean(
-				R.string.pref_menus_show_random_main_menu_key,
-				false);
-	}
-
 	public static boolean pref_show_multireddit_main_menu() {
 		return getBoolean(
 				R.string.pref_menus_show_multireddit_main_menu_key,
@@ -589,6 +584,7 @@ public final class PrefsUtility {
 		SCORE,
 		AGE,
 		GOLD,
+		CROSSPOST,
 		SUBREDDIT,
 		DOMAIN,
 		STICKY,
@@ -806,6 +802,11 @@ public final class PrefsUtility {
 				true);
 	}
 
+	public static boolean pref_behaviour_video_frame_step() {
+		return getBoolean(R.string.pref_behaviour_video_frame_step_key,
+				false);
+	}
+
 	public static boolean pref_behaviour_video_mute_default() {
 		return getBoolean(
 				R.string.pref_behaviour_video_mute_default_key,
@@ -987,6 +988,7 @@ public final class PrefsUtility {
 		COPY,
 		USER_PROFILE,
 		PROPERTIES,
+		MARK_READ,
 		DISABLED
 	}
 
@@ -1161,6 +1163,12 @@ public final class PrefsUtility {
 		return getBoolean(
 				R.string.pref_behaviour_hide_read_posts_key,
 				false);
+	}
+
+	public static boolean pref_behaviour_mark_posts_as_read() {
+		return getBoolean(
+				R.string.pref_behaviour_mark_posts_as_read_key,
+				true);
 	}
 
 	public enum SharingDomain {
@@ -1380,7 +1388,7 @@ public final class PrefsUtility {
 
 		final Set<String> strings = getStringSet(
 				R.string.pref_menus_post_context_items_key,
-				R.array.pref_menus_post_context_items_return);
+				R.array.pref_menus_post_context_items_default);
 
 		final EnumSet<RedditPostActions.Action> result = EnumSet.noneOf(
 				RedditPostActions.Action.class);
@@ -1463,8 +1471,12 @@ public final class PrefsUtility {
 		final EnumSet<MainMenuFragment.MainMenuShortcutItems> result = EnumSet.noneOf(
 				MainMenuFragment.MainMenuShortcutItems.class);
 		for(final String s : strings) {
-			result.add(MainMenuFragment.MainMenuShortcutItems.valueOf(
-					StringUtils.asciiUppercase(s)));
+			try {
+				result.add(MainMenuFragment.MainMenuShortcutItems.valueOf(
+						StringUtils.asciiUppercase(s)));
+			} catch (final Exception e) {
+				Log.e("PrefsUtility", "Ignoring unknown constant " + s, e);
+			}
 		}
 
 		return result;
