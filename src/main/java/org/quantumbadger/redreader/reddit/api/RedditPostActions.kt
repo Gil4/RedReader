@@ -477,11 +477,19 @@ object RedditPostActions {
 			}
 
 			Action.COPY -> {
+				var body: UriString = if (PrefsUtility.pref_behaviour_share_permalink()) {
+					Constants.Reddit.getNonAPIUri(post.src.permalink)
+				} else {
+					Constants.Reddit.getNonAPIUri(
+							Constants.Reddit.PATH_COMMENTS + post.src.idAlone)
+				}
+				body = LinkHandler.getPreferredRedditUriString(body)
+
 				val clipboardManager: ClipboardManager =
 					activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 				val data = ClipData.newPlainText(
-					post.src.author,
-					post.src.url?.value
+					null,
+					body.value
 				)
 				clipboardManager.setPrimaryClip(data)
 				General.quickToast(
